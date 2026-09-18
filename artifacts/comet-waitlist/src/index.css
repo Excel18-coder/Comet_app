@@ -1,0 +1,208 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap');
+@import 'tailwindcss';
+@import 'tw-animate-css';
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+  --font-sans: var(--app-font-sans);
+  --font-mono: var(--app-font-mono);
+  --radius-md: 0.625rem;
+  --radius-lg: 1rem;
+  --radius-xl: 1.5rem;
+}
+
+:root {
+  --background: 45 43% 94%;
+  --foreground: 221 38% 12%;
+  --border: 221 20% 83%;
+  --input: 221 20% 83%;
+  --ring: 229 82% 57%;
+  --card: 45 47% 97%;
+  --card-foreground: 221 38% 12%;
+  --primary: 229 82% 57%;
+  --primary-foreground: 45 43% 96%;
+  --secondary: 160 27% 87%;
+  --secondary-foreground: 165 28% 20%;
+  --muted: 45 24% 89%;
+  --muted-foreground: 221 15% 43%;
+  --accent: 8 83% 65%;
+  --accent-foreground: 221 38% 12%;
+  --app-font-sans: 'Manrope', sans-serif;
+  --app-font-mono: 'DM Mono', monospace;
+  --app-font-display: 'Space Grotesk', sans-serif;
+  --radius: 0.75rem;
+}
+
+.dark {
+  --background: 221 38% 12%;
+  --foreground: 45 43% 94%;
+  --border: 221 22% 26%;
+  --input: 221 22% 26%;
+  --ring: 229 82% 67%;
+  --card: 221 33% 16%;
+  --card-foreground: 45 43% 94%;
+  --primary: 229 82% 67%;
+  --primary-foreground: 221 38% 12%;
+  --secondary: 165 20% 24%;
+  --secondary-foreground: 45 43% 94%;
+  --muted: 221 26% 20%;
+  --muted-foreground: 221 13% 68%;
+  --accent: 8 83% 65%;
+  --accent-foreground: 221 38% 12%;
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply font-sans antialiased;
+    background: hsl(var(--background));
+    color: hsl(var(--foreground));
+  }
+
+  ::selection {
+    background: hsl(var(--primary) / 0.2);
+  }
+}
+
+@layer utilities {
+  .font-display {
+    font-family: var(--app-font-display);
+  }
+
+  .font-mono {
+    font-family: var(--app-font-mono);
+  }
+
+  .text-balance {
+    text-wrap: balance;
+  }
+}
+
+.comet-page {
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 80% 8%, hsl(229 82% 57% / 0.09), transparent 28rem),
+    hsl(var(--background));
+}
+
+.noise-layer::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  pointer-events: none;
+  opacity: 0.035;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.7'/%3E%3C/svg%3E");
+  mix-blend-mode: multiply;
+}
+
+.eyebrow {
+  color: hsl(var(--primary));
+  font-family: var(--app-font-mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+
+.reveal {
+  animation: reveal-up 0.8s cubic-bezier(0.2, 0.75, 0.25, 1) both;
+}
+
+.reveal-delay-1 { animation-delay: 80ms; }
+.reveal-delay-2 { animation-delay: 160ms; }
+.reveal-delay-3 { animation-delay: 240ms; }
+.reveal-delay-4 { animation-delay: 320ms; }
+
+@keyframes reveal-up {
+  from { opacity: 0; transform: translateY(18px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes drift {
+  0%, 100% { transform: translateY(0) rotate(-1deg); }
+  50% { transform: translateY(-8px) rotate(1deg); }
+}
+
+@keyframes pulse-line {
+  0% { stroke-dashoffset: 100; opacity: 0.2; }
+  45%, 80% { opacity: 1; }
+  100% { stroke-dashoffset: 0; opacity: 0.2; }
+}
+
+@keyframes breathe {
+  0%, 100% { transform: scale(1); opacity: 0.65; }
+  50% { transform: scale(1.12); opacity: 1; }
+}
+
+.device-float {
+  animation: drift 7s ease-in-out infinite;
+}
+
+.device-float-slow {
+  animation: drift 9s ease-in-out 1.1s infinite;
+}
+
+.connection-line {
+  stroke-dasharray: 7 11;
+  animation: pulse-line 4.2s ease-in-out infinite;
+}
+
+.signal-dot {
+  animation: breathe 2.8s ease-in-out infinite;
+  transform-origin: center;
+}
+
+.faq-answer {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 280ms ease;
+}
+
+.faq-answer[data-open='true'] {
+  grid-template-rows: 1fr;
+}
+
+.faq-answer > div {
+  overflow: hidden;
+}
+
+.focus-ring:focus-visible,
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible {
+  outline: 3px solid hsl(var(--accent) / 0.65);
+  outline-offset: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

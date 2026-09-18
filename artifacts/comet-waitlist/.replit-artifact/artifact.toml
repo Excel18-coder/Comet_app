@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "Comet Waitlist"
+description = "A polished marketing website and early-access waitlist for Comet, a cloud filesystem that makes files feel local across every device."
+version = "1.0.0"
+id = "artifacts/comet-waitlist"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 21857
+
+[services.development]
+run = "pnpm --filter @workspace/comet-waitlist run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/comet-waitlist", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/comet-waitlist/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "21857"
+BASE_PATH = "/"
