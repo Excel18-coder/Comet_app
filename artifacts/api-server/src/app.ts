@@ -3,6 +3,7 @@ import cors from "cors";
 import pinoHttp from "pino-http";
 import router from "./routes";
 import { logger } from "./lib/logger";
+import { connectToDatabase } from "./lib/mongodb";
 
 const app: Express = express();
 
@@ -28,6 +29,12 @@ app.use(
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Initialize database connection
+connectToDatabase().catch((error) => {
+  logger.error({ error }, "Failed to initialize database");
+  process.exit(1);
+});
 
 app.use("/api", router);
 
