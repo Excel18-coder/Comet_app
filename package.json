@@ -9,7 +9,7 @@
     "dev:web": "PORT=5173 BASE_PATH=/ pnpm --filter @workspace/comet-waitlist run dev",
     "build": "pnpm run typecheck && pnpm -r --if-present run build",
     "typecheck:libs": "tsc --build",
-    "typecheck": "pnpm run typecheck:libs && pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck"
+    "typecheck": "pnpm run typecheck:libs && pnpm -r --filter \"./backend\" --filter \"./frontend\" --filter \"./scripts\" --if-present run typecheck"
   },
   "private": true,
   "dependencies": {
