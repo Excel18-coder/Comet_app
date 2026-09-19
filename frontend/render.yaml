@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: comet-waitlist
+    runtime: node
+    plan: free
+    branch: main
+    buildCommand: npm install -g pnpm && pnpm install --frozen-lockfile && pnpm run build
+    startCommand: pnpm run serve
+    envVars:
+      - key: NODE_VERSION
+        value: "24"
+      - key: VITE_API_BASE_URL
+        value: "https://comet-api.onrender.com"
