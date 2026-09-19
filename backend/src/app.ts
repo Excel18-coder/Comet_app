@@ -14,6 +14,8 @@ import pinoHttp from "pino-http";
 import router from "./routes";
 import { logger } from "./lib/logger";
 import { connectToDatabase } from "./lib/mongodb";
+import path from "node:path";
+import fs from "node:fs";
 
 const app: Express = express();
 
@@ -80,5 +82,29 @@ connectToDatabase().catch((error) => {
 });
 
 app.use("/api", router);
+
+// Serve frontend static assets if the build exists (production or combined deploys)
+const frontendDist = path.resolve(__dirname, "../../frontend/dist/public");
+
+if (fs.existsSync(frontendDist)) {
+  logger.info({ frontendDist }, "Serving static frontend from backend");
+  app.get("/favicon.ico", (req, res) => {
+    const faviconPath = path.join(frontendDist, "favicon.ico");
+    if (fs.existsSync(faviconPath)) return res.sendFile(faviconPath);
+    return res.sendStatus(404);
+  });
+
+  app.use(express.static(frontendDist, { maxAge: "1d" }));
+
+  // SPA fallback - serve index.html for unknown non-API routes
+  app.get("/*", (req, res, next) => {
+    if (req.path.startsWith("/api/") || req.path === "/api") return next();
+    const indexHtml = path.join(frontendDist, "index.html");
+    if (fs.existsSync(indexHtml)) return res.sendFile(indexHtml);
+    return res.sendStatus(404);
+  });
+} else {
+  logger.info({ frontendDist }, "Frontend build not found; not serving static files");
+}
 
 export default app;
