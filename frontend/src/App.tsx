@@ -103,7 +103,10 @@ function StatusMessage({ status }: { status: FormStatus }) {
 }
 
 function buildApiUrl(path: string) {
-  const base = import.meta.env.VITE_API_BASE_URL ?? '';
+  const base = import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, '') ?? '';
+  if (!path.startsWith('/')) {
+    path = `/${path}`;
+  }
   return `${base}${path}`;
 }
 
@@ -743,9 +746,12 @@ function AdminDashboard() {
     default: '#94a3b8',
   };
 
-  const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? '';
+  const apiBaseUrl = import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, '') ?? '';
 
   function buildApiUrl(path: string) {
+    if (!path.startsWith('/')) {
+      path = `/${path}`;
+    }
     return `${apiBaseUrl}${path}`;
   }
 
