@@ -886,11 +886,13 @@ function AdminDashboard() {
       <div className="min-h-screen bg-[#f8f5ed] flex items-center justify-center px-5">
         <div className="w-full max-w-sm">
           <div className="mb-8 text-center">
-            <Logo />
-            <h1 className="mt-6 font-display text-2xl font-semibold text-[#152752]">Admin Dashboard</h1>
+            <div className="text-center mb-6">
+              <h1 className="font-display text-3xl font-bold text-[#152752]">Comet</h1>
+            </div>
+            <h2 className="mt-6 font-display text-2xl font-semibold text-[#152752]">Admin Dashboard</h2>
           </div>
 
-          <form onSubmit={handleLogin} className="rounded-2xl border border-[#c8ceda] bg-[#f8f5ed] p-8 space-y-4">
+          <form onSubmit={handleLogin} className="rounded-2xl border border-[#c8ceda] bg-white p-8 space-y-4 shadow-sm">
             <div>
               <label htmlFor="token" className="block text-xs font-semibold text-[#152752] mb-2">
                 Password
@@ -903,25 +905,29 @@ function AdminDashboard() {
                   setTokenInput(e.target.value);
                   setError('');
                 }}
-                placeholder="Enter password"
-                className={`w-full rounded-xl border px-4 py-2 text-sm outline-none focus:border-[#3558dc] bg-[#f8f5ed] ${
+                placeholder="Enter admin password"
+                autoFocus
+                className={`w-full rounded-xl border px-4 py-2.5 text-sm outline-none focus:border-[#3558dc] focus:ring-2 focus:ring-[#3558dc]/20 bg-white transition-all ${
                   error ? 'border-[#a64646]' : 'border-[#bec8dc]'
                 }`}
               />
             </div>
             {error && (
-              <div className="flex items-start gap-2 rounded-lg bg-[#ffebe5] p-3">
-                <CircleHelp size={16} className="text-[#a64646] shrink-0 mt-0.5" />
+              <div className="flex items-start gap-2 rounded-lg bg-[#ffebe5] p-3 border border-[#ffccc7]">
                 <span className="text-xs text-[#a64646]">{error}</span>
               </div>
             )}
             <button
               type="submit"
-              className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-[#3558dc] px-5 py-2.5 text-sm font-bold text-[#f7f3e8] transition-transform hover:-translate-y-0.5"
+              className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-[#3558dc] px-5 py-2.5 text-sm font-bold text-white transition-all hover:bg-[#2a4ab5] active:scale-95"
             >
               Sign in
             </button>
           </form>
+          
+          <div className="mt-6 text-center text-xs text-[#6d7892]">
+            <p>Default password: <code className="font-mono bg-[#f0f0f0] px-2 py-1 rounded">Nm643PpQ</code></p>
+          </div>
         </div>
       </div>
     );
