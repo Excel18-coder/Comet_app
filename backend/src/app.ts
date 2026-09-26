@@ -24,10 +24,15 @@ const allowedOrigins = new Set(
     "http://localhost:5173",
     "http://localhost:3000",
     "http://127.0.0.1:5173",
-    "https://comet-mnl4.onrender.com",
+    "https://cometapp.onrender.com",
+    "https://comet-app-iv30.onrender.com",
+    "https://cometapp.onrender.com/",
+    "https://comet-app-iv30.onrender.com/",
     process.env.FRONTEND_URL,
     process.env.CORS_ORIGIN,
-  ].filter((value): value is string => Boolean(value)),
+  ]
+    .filter((value): value is string => Boolean(value))
+    .map((value) => value.replace(/\/$/, "")),
 );
 
 const corsOptions = {
@@ -52,25 +57,7 @@ const corsOptions = {
   allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
 };
 
-app.use(
-  pinoHttp({
-    logger,
-    serializers: {
-      req(req) {
-        return {
-          id: req.id,
-          method: req.method,
-          url: req.url?.split("?")[0],
-        };
-      },
-      res(res) {
-        return {
-          statusCode: res.statusCode,
-        };
-      },
-    },
-  }),
-);
+app.options("*", cors(corsOptions));
 app.use(cors(corsOptions));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
