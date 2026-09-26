@@ -719,6 +719,7 @@ function Router() {
       <Switch>
         <Route path="/" component={Home} />
         <Route path="/admin" component={AdminDashboard} />
+        <Route path="/ADMIN" component={AdminDashboard} />
         <Route component={NotFound} />
       </Switch>
     </RoutedErrorBoundary>
