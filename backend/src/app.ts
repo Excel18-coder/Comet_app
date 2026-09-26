@@ -57,7 +57,7 @@ const corsOptions = {
   allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
 };
 
-app.options("*", cors(corsOptions));
+app.options(/^(.*)$/, cors(corsOptions));
 app.use(cors(corsOptions));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -84,8 +84,8 @@ if (fs.existsSync(frontendDist)) {
   app.use(express.static(frontendDist, { maxAge: "1d" }));
 
   // SPA fallback - serve index.html for unknown non-API routes
-  app.get("/*", (req, res, next) => {
-    if (req.path.startsWith("/api/") || req.path === "/api") return next();
+  app.get(/^(?!\/api(?:\/|$)).*/, (req, res, next) => {
+    if (req.path.startsWith("/api/" ) || req.path === "/api") return next();
     const indexHtml = path.join(frontendDist, "index.html");
     if (fs.existsSync(indexHtml)) return res.sendFile(indexHtml);
     return res.sendStatus(404);
