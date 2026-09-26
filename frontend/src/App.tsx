@@ -714,15 +714,16 @@ function Home() {
 }
 
 function Router() {
+  const [location] = useLocation();
   return (
-    <RoutedErrorBoundary>
+    <ErrorBoundary resetKey={location}>
       <Switch>
         <Route path="/" component={Home} />
         <Route path="/admin" component={AdminDashboard} />
         <Route path="/ADMIN" component={AdminDashboard} />
         <Route component={NotFound} />
       </Switch>
-    </RoutedErrorBoundary>
+    </ErrorBoundary>
   );
 }
 
@@ -1157,11 +1158,6 @@ function AdminDashboard() {
       </div>
     </div>
   );
-}
-
-function RoutedErrorBoundary({ children }: { children: ReactNode }) {
-  const [location] = useLocation();
-  return <ErrorBoundary resetKey={location}>{children}</ErrorBoundary>;
 }
 
 function App() {
