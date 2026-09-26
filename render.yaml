@@ -1,0 +1,39 @@
+services:
+  - type: web
+    name: comet-backend
+    runtime: node
+    region: oregon
+    plan: free
+    branch: main
+    buildCommand: |
+      corepack enable
+      pnpm install --frozen-lockfile
+      pnpm --filter @workspace/api-server run build
+    startCommand: |
+      pnpm --filter @workspace/api-server run start
+    healthCheckPath: /api/healthz
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: PORT
+        generateValue: true
+      - key: MONGODB_URI
+        sync: false
+      - key: ADMIN_API_TOKEN
+        sync: false
+      - key: FRONTEND_URL
+        value: https://comet-frontend.onrender.com
+      - key: CORS_ORIGIN
+        value: https://comet-frontend.onrender.com
+
+  - type: static
+    name: comet-frontend
+    branch: main
+    buildCommand: |
+      corepack enable
+      pnpm install --frozen-lockfile
+      pnpm --filter @workspace/comet-waitlist run build
+    staticPublishPath: frontend/dist/public
+    envVars:
+      - key: VITE_API_BASE_URL
+        value: https://comet-backend.onrender.com
