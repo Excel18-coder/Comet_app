@@ -35,6 +35,21 @@ const allowedOrigins = new Set(
     .map((value) => value.replace(/\/$/, "")),
 );
 
+function isAllowedOrigin(origin: string) {
+  const normalizedOrigin = origin.replace(/\/$/, "");
+
+  if (allowedOrigins.has(normalizedOrigin)) {
+    return true;
+  }
+
+  try {
+    const { hostname } = new URL(normalizedOrigin);
+    return hostname.endsWith(".vercel.app") || hostname.endsWith(".vercel.app.");
+  } catch {
+    return false;
+  }
+}
+
 const corsOptions = {
   origin(origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) {
     if (!origin) {
@@ -42,9 +57,7 @@ const corsOptions = {
       return;
     }
 
-    const normalizedOrigin = origin.replace(/\/$/, "");
-
-    if (allowedOrigins.has(normalizedOrigin)) {
+    if (isAllowedOrigin(origin)) {
       callback(null, true);
       return;
     }
