@@ -1,0 +1,14 @@
+name = "comet-waitlist"
+compatibility_date = "2024-12-10"
+
+# Cloudflare Pages configuration
+[pages]
+build_command = "pnpm --dir frontend run build"
+build_output_dir = "frontend/dist/public"
+
+[env.production]
+name = "comet-waitlist-prod"
+
+[env.production.pages]
+build_command = "pnpm --dir frontend run build"
+build_output_dir = "frontend/dist/public"

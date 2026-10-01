@@ -1,0 +1,3 @@
+# This wrangler.toml is not used for Cloudflare Pages
+# Use the root wrangler.toml instead
+# Cloudflare Pages will run the build from the repository root
