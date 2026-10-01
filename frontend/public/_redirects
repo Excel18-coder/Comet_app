@@ -1,2 +1,3 @@
-# Redirect all non-API routes to index.html for SPA routing
-/*    /index.html   200
+# SPA redirect disabled for Cloudflare Pages (caused infinite loop error).
+# Configure SPA fallback in the Pages dashboard or re-add a Cloudflare-compatible
+# redirects rule that excludes existing asset paths.
