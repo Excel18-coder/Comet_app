@@ -305,31 +305,35 @@ function AnimatedFileStream() {
     { name: 'Video_Final.mp4', size: '4.8 GB', icon: '🎬', color: 'bg-[#dcefe6]' },
     { name: 'Analytics_Q3.xlsx', size: '24 MB', icon: '📊', color: 'bg-[#e9e0f2]' },
     { name: 'Presentation.key', size: '310 MB', icon: '💼', color: 'bg-[#f0e5c9]' },
+    { name: 'Archive_2026.tar', size: '8.2 GB', icon: '📦', color: 'bg-[#dcefe6]' },
   ];
 
   return (
-    <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-xs">
-      <div className="relative h-48 sm:h-56">
-        <div className="absolute inset-0 bg-gradient-to-b from-[#6f86ef]/10 to-transparent rounded-lg pointer-events-none" />
+    <div className="absolute top-8 sm:top-12 left-1/2 -translate-x-1/2 w-[90%] max-w-sm">
+      <div className="relative h-64 sm:h-80">
+        <div className="absolute inset-0 bg-gradient-to-b from-[#6f86ef]/15 via-[#6f86ef]/5 to-transparent rounded-xl pointer-events-none" />
         {files.map((file, index) => (
           <div
             key={index}
-            className="absolute left-0 right-0 mx-auto flex items-center gap-2 px-3 py-2 rounded-lg bg-white/40 backdrop-blur-sm border border-white/20 animate-pulse"
+            className="absolute left-0 right-0 mx-auto flex items-center gap-3 px-4 py-3 rounded-lg bg-white/50 backdrop-blur-md border border-white/30 shadow-sm hover:shadow-md transition-shadow"
             style={{
-              width: `${70 + index * 5}%`,
-              top: `${index * 12}%`,
-              animation: `slideInOut 4s ease-in-out infinite`,
-              animationDelay: `${index * 0.6}s`,
+              width: `${75 + (index % 3) * 8}%`,
+              top: `${index * 13.5}%`,
+              animation: `slideInOut 5s ease-in-out infinite`,
+              animationDelay: `${index * 0.7}s`,
             }}
           >
-            <span className={`inline-flex items-center justify-center h-6 w-6 rounded ${file.color} text-xs font-bold flex-shrink-0`}>
+            <span className={`inline-flex items-center justify-center h-8 w-8 rounded-md ${file.color} text-lg flex-shrink-0 font-semibold`}>
               {file.icon}
             </span>
             <div className="flex-1 min-w-0">
-              <div className="text-xs font-semibold text-[#152752] truncate">{file.name}</div>
-              <div className="text-[0.65rem] text-[#7b8599]">{file.size}</div>
+              <div className="text-sm font-semibold text-[#152752] truncate">{file.name}</div>
+              <div className="text-xs text-[#7b8599]">{file.size}</div>
             </div>
-            <span className="text-[0.65rem] text-[#3558dc] font-mono flex-shrink-0">↓</span>
+            <div className="flex items-center gap-1.5 flex-shrink-0">
+              <div className="w-6 h-0.5 bg-gradient-to-r from-[#3558dc] to-[#ff7c67] rounded-full" />
+              <span className="text-xs text-[#3558dc] font-mono font-bold">↓</span>
+            </div>
           </div>
         ))}
       </div>
