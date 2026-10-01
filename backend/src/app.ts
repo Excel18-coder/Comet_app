@@ -26,6 +26,8 @@ const allowedOrigins = new Set(
     "http://127.0.0.1:5173",
     "https://comet.vconect.co.ke",
     "https://comet.vconect.co.ke/",
+    "https://app.vconect.co.ke",
+    "https://app.vconect.co.ke/",
     "https://cometapp.onrender.com",
     "https://comet-app-iv30.onrender.com",
     "https://cometapp.onrender.com/",
@@ -78,9 +80,8 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Initialize database connection
-connectToDatabase().catch((error) => {
-  logger.error({ error }, "Failed to initialize database");
-  process.exit(1);
+void connectToDatabase().catch((error) => {
+  logger.error({ error }, "Database initialization failed");
 });
 
 app.use("/api", router);

@@ -3,5 +3,11 @@
   "framework": "vite",
   "installCommand": "if [ -d frontend ] && [ ! -f vite.config.ts ]; then cd frontend; fi; pnpm install --frozen-lockfile",
   "buildCommand": "if [ -d frontend ] && [ ! -f vite.config.ts ]; then cd frontend; fi; pnpm run build",
-  "outputDirectory": "dist/public"
+  "outputDirectory": "dist/public",
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
 }

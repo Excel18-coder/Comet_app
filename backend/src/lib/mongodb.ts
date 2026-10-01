@@ -131,6 +131,8 @@ export async function connectToDatabase(): Promise<{ db: Db; client: MongoClient
     return { client: cachedClient, db: cachedDb };
   }
 
+  const useMemoryFallback = process.env.NODE_ENV !== 'production';
+
   try {
     const uri = getMongodbUri();
     const client = new MongoClient(uri);
@@ -152,6 +154,11 @@ export async function connectToDatabase(): Promise<{ db: Db; client: MongoClient
 
     return { db, client };
   } catch (error) {
+    if (process.env.NODE_ENV === 'production') {
+      logger.error({ error }, 'MongoDB connection failed in production. The app cannot start without MONGODB_URI.');
+      throw error;
+    }
+
     logger.warn({ error }, 'MongoDB unavailable. Falling back to in-memory storage for local development.');
     cachedDb = createMemoryDatabase();
     cachedClient = null;
