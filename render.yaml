@@ -14,7 +14,7 @@ services:
     healthCheckPath: /api/healthz
     envVars:
       - key: NODE_VERSION
-        value: "22"
+        value: "24"
       - key: PORT
         generateValue: true
       - key: MONGODB_URI
