@@ -256,7 +256,7 @@ function WaitlistForm({ dark = false, compact = false }: { dark?: boolean; compa
             setWhatsapp(formatted);
             if (status !== 'idle') setStatus('idle');
           }}
-          placeholder="+1 555 123 4567"
+          placeholder="0700000000"
           className={`min-h-12 w-full rounded-xl border px-4 text-sm outline-none transition-colors ${inputClass}`}
           data-testid={`input-whatsapp-${dark ? 'dark' : 'light'}`}
         />
@@ -1155,7 +1155,7 @@ function AdminDashboard() {
               </div>
 
               {recentSignups.length === 0 ? (
-                <div className="text-sm text-[#6d7892]">No signups yet.</div>
+                <div className="text-sm text-[#6d7892]">No signups .</div>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="min-w-full text-left text-sm">
