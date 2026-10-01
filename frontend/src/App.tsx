@@ -298,6 +298,45 @@ function WaitlistForm({ dark = false, compact = false }: { dark?: boolean; compa
   );
 }
 
+function AnimatedFileStream() {
+  const files = [
+    { name: 'Project_2026.zip', size: '2.4 GB', icon: '📁', color: 'bg-[#ffdbd3]' },
+    { name: 'Design_Assets.figma', size: '156 MB', icon: '🎨', color: 'bg-[#dce3fb]' },
+    { name: 'Video_Final.mp4', size: '4.8 GB', icon: '🎬', color: 'bg-[#dcefe6]' },
+    { name: 'Analytics_Q3.xlsx', size: '24 MB', icon: '📊', color: 'bg-[#e9e0f2]' },
+    { name: 'Presentation.key', size: '310 MB', icon: '💼', color: 'bg-[#f0e5c9]' },
+  ];
+
+  return (
+    <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-xs">
+      <div className="relative h-48 sm:h-56">
+        <div className="absolute inset-0 bg-gradient-to-b from-[#6f86ef]/10 to-transparent rounded-lg pointer-events-none" />
+        {files.map((file, index) => (
+          <div
+            key={index}
+            className="absolute left-0 right-0 mx-auto flex items-center gap-2 px-3 py-2 rounded-lg bg-white/40 backdrop-blur-sm border border-white/20 animate-pulse"
+            style={{
+              width: `${70 + index * 5}%`,
+              top: `${index * 12}%`,
+              animation: `slideInOut 4s ease-in-out infinite`,
+              animationDelay: `${index * 0.6}s`,
+            }}
+          >
+            <span className={`inline-flex items-center justify-center h-6 w-6 rounded ${file.color} text-xs font-bold flex-shrink-0`}>
+              {file.icon}
+            </span>
+            <div className="flex-1 min-w-0">
+              <div className="text-xs font-semibold text-[#152752] truncate">{file.name}</div>
+              <div className="text-[0.65rem] text-[#7b8599]">{file.size}</div>
+            </div>
+            <span className="text-[0.65rem] text-[#3558dc] font-mono flex-shrink-0">↓</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function ConnectedDevices() {
   return (
     <div className="relative mx-auto h-[430px] w-full max-w-[650px] sm:h-[500px]" aria-label="A laptop and phone connected to Comet cloud storage">
@@ -306,6 +345,7 @@ function ConnectedDevices() {
           <span key={index} className="twinkle-dot" style={{ left: `${(index * 19) % 100}%`, top: `${(index * 23) % 100}%`, animationDelay: `${index * 0.22}s` }} />
         ))}
       </div>
+      <AnimatedFileStream />
       <div className="absolute left-1/2 top-0 h-40 w-40 -translate-x-1/2 rounded-full bg-[#6f86ef]/20 blur-3xl" />
       <div className="absolute left-[11%] top-[16%] text-[#3558dc]">
         <span className="signal-dot absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-[#ff7c67]" />
