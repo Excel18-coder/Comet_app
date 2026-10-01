@@ -1,24 +1,9 @@
 name = "comet-waitlist"
 compatibility_date = "2026-10-01"
 
-# Deploy static assets (frontend build) when running `npx wrangler deploy` in CI.
-# Wrangler will upload the directory specified below.
+# Deploy static frontend assets when running `npx wrangler deploy` in CI.
 [assets]
 directory = "./frontend/dist/public"
 
-# If you prefer Pages-specific commands you can still run:
-# npx wrangler pages publish frontend/dist/public --project-name=comet-waitlist
-name = "comet-waitlist"
-compatibility_date = "2024-12-10"
-
-# Cloudflare Pages configuration
-[pages]
-build_command = "pnpm --dir frontend run build"
-build_output_dir = "frontend/dist/public"
-
-[env.production]
-name = "comet-waitlist-prod"
-
-[env.production.pages]
-build_command = "pnpm --dir frontend run build"
-build_output_dir = "frontend/dist/public"
+# Use `npx wrangler pages publish frontend/dist/public --project-name=comet-waitlist`
+# if you prefer the Pages publish command instead of `wrangler deploy`.
