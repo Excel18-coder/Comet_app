@@ -11,8 +11,6 @@
     "dev:web": "PORT=5173 BASE_PATH=/ pnpm --filter @workspace/comet-waitlist run dev",
     "build": "pnpm run typecheck && pnpm -r --if-present run build",
     "build:web": "pnpm --dir frontend run build",
-    "publish:cloudflare": "pnpm run build:web && npx wrangler pages publish frontend/dist/public --project-name=comet-waitlist --branch main",
-    "deploy:cloudflare": "pnpm run publish:cloudflare",
     "typecheck:libs": "tsc --build",
     "typecheck": "pnpm run typecheck:libs && pnpm -r --filter \"./backend\" --filter \"./frontend\" --filter \"./scripts\" --if-present run typecheck"
   },
