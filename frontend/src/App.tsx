@@ -309,30 +309,30 @@ function AnimatedFileStream() {
   ];
 
   return (
-    <div className="absolute top-8 sm:top-12 left-1/2 -translate-x-1/2 w-[90%] max-w-sm">
-      <div className="relative h-64 sm:h-80">
-        <div className="absolute inset-0 bg-gradient-to-b from-[#6f86ef]/15 via-[#6f86ef]/5 to-transparent rounded-xl pointer-events-none" />
+    <div className="animated-file-container absolute top-0 left-0 w-full h-full pointer-events-none">
+      <div className="file-stack relative mx-auto h-full w-[86%] max-w-[900px]">
+        <div className="absolute inset-0 rounded-2xl bg-gradient-to-b from-[#6f86ef]/12 to-transparent pointer-events-none" />
         {files.map((file, index) => (
           <div
             key={index}
-            className="absolute left-0 right-0 mx-auto flex items-center gap-3 px-4 py-3 rounded-lg bg-white/50 backdrop-blur-md border border-white/30 shadow-sm hover:shadow-md transition-shadow"
+            className="file-card absolute left-0 right-0 mx-auto flex items-center gap-4 px-5 py-4 rounded-xl bg-white/55 backdrop-blur-lg border border-white/20 shadow-sm pointer-events-auto"
             style={{
-              width: `${75 + (index % 3) * 8}%`,
-              top: `${index * 13.5}%`,
-              animation: `slideInOut 5s ease-in-out infinite`,
-              animationDelay: `${index * 0.7}s`,
+              width: `${80 + (index % 3) * 6}%`,
+              top: `${8 + index * 12}%`,
+              animation: `slideInOut 6s cubic-bezier(.2,.9,.25,1) infinite`,
+              animationDelay: `${index * 0.5}s`,
             }}
           >
-            <span className={`inline-flex items-center justify-center h-8 w-8 rounded-md ${file.color} text-lg flex-shrink-0 font-semibold`}>
+            <span className={`inline-flex items-center justify-center h-10 w-10 rounded-md ${file.color} text-lg flex-shrink-0 font-semibold`}>
               {file.icon}
             </span>
             <div className="flex-1 min-w-0">
-              <div className="text-sm font-semibold text-[#152752] truncate">{file.name}</div>
+              <div className="text-sm md:text-base font-semibold text-[#152752] truncate">{file.name}</div>
               <div className="text-xs text-[#7b8599]">{file.size}</div>
             </div>
-            <div className="flex items-center gap-1.5 flex-shrink-0">
-              <div className="w-6 h-0.5 bg-gradient-to-r from-[#3558dc] to-[#ff7c67] rounded-full" />
-              <span className="text-xs text-[#3558dc] font-mono font-bold">↓</span>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <div className="w-8 h-1 bg-gradient-to-r from-[#3558dc] to-[#ff7c67] rounded-full" />
+              <span className="text-sm text-[#3558dc] font-mono font-semibold">↓</span>
             </div>
           </div>
         ))}
@@ -343,19 +343,19 @@ function AnimatedFileStream() {
 
 function ConnectedDevices() {
   return (
-    <div className="relative mx-auto h-[430px] w-full max-w-[650px] sm:h-[500px]" aria-label="A laptop and phone connected to Comet cloud storage">
+    <div className="relative mx-auto h-[520px] md:h-[640px] lg:h-[760px] w-full max-w-[980px]" aria-label="A laptop and phone connected to Comet cloud storage">
       <div className="star-field" aria-hidden="true">
         {Array.from({ length: 20 }).map((_, index) => (
           <span key={index} className="twinkle-dot" style={{ left: `${(index * 19) % 100}%`, top: `${(index * 23) % 100}%`, animationDelay: `${index * 0.22}s` }} />
         ))}
       </div>
       <AnimatedFileStream />
-      <div className="absolute left-1/2 top-0 h-40 w-40 -translate-x-1/2 rounded-full bg-[#6f86ef]/20 blur-3xl" />
-      <div className="absolute left-[11%] top-[16%] text-[#3558dc]">
+      <div className="absolute left-1/2 top-4 h-56 w-56 -translate-x-1/2 rounded-full bg-[#6f86ef]/20 blur-3xl" />
+      <div className="absolute left-[10%] top-[18%] text-[#3558dc]">
         <span className="signal-dot absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-[#ff7c67]" />
         <Cloud size={76} strokeWidth={1.2} />
       </div>
-      <svg className="absolute inset-x-0 top-[17%] h-[150px] w-full" viewBox="0 0 650 150" fill="none" aria-hidden="true">
+      <svg className="absolute inset-x-0 top-[22%] md:top-[20%] h-[180px] md:h-[220px] w-full" viewBox="0 0 650 150" fill="none" aria-hidden="true">
         <path className="connection-line" d="M120 54 C230 130 326 128 408 64" stroke="#8298eb" strokeWidth="1.5" />
         <path className="connection-line" d="M145 54 C265 24 430 15 548 88" stroke="#ff9b87" strokeWidth="1.5" style={{ animationDelay: '1.2s' }} />
         <circle cx="284" cy="111" r="3" fill="#ff7c67" />
