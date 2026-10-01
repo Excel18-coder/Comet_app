@@ -1,9 +1,2 @@
-name = "comet-waitlist"
-compatibility_date = "2026-10-01"
-
-# Deploy static frontend assets when running `npx wrangler deploy` in CI.
-[assets]
-directory = "./frontend/dist/public"
-
-# Use `npx wrangler pages publish frontend/dist/public --project-name=comet-waitlist`
-# if you prefer the Pages publish command instead of `wrangler deploy`.
+### Cloudflare/Wrangler configuration removed. Project uses Vercel (frontend) and Render (backend).
+### This file intentionally left blank to avoid accidental Cloudflare deploys.

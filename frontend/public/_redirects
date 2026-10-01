@@ -1,3 +1,1 @@
-# SPA redirect disabled for Cloudflare Pages (caused infinite loop error).
-# Configure SPA fallback in the Pages dashboard or re-add a Cloudflare-compatible
-# redirects rule that excludes existing asset paths.
+### Removed Cloudflare `_redirects`. Use Vercel routing or configure SPA fallback in Vercel.
