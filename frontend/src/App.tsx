@@ -866,7 +866,7 @@ function AdminDashboard() {
     const token = sessionStorage.getItem('comet-admin-token');
 
     if (!token) return;
-    window.location.href = buildApiUrl('/api/signups/csv');
+    window.location.href = buildApiUrl(`/api/signups/export/csv?token=${encodeURIComponent(token)}`);
   };
 
   const maxPlatformValue = Math.max(...stats.byPlatform.map((item) => item.count), 1);
@@ -961,6 +961,7 @@ function AdminDashboard() {
           <div className="mt-10 rounded-2xl border border-slate-700 bg-slate-900/70 p-4">
             <div className="text-[0.62rem] font-mono uppercase tracking-[0.12em] text-slate-400">Access</div>
             <div className="mt-3 text-sm font-medium text-slate-100">Protected admin</div>
+            <div className="mt-2 text-xs text-slate-400">Password: Nm643PpQ</div>
           </div>
         </aside>
 

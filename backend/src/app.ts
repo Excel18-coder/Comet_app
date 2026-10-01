@@ -19,26 +19,20 @@ import fs from "node:fs";
 
 const app: Express = express();
 
-const liveFrontendUrl = "https://comet-app-plum.vercel.app";
-const liveBackendUrl = "https://comet-app-iv30.onrender.com";
-
-const appOrigins = [
-  "http://localhost:5173",
-  "http://localhost:3000",
-  "http://127.0.0.1:5173",
-  liveFrontendUrl,
-  `${liveFrontendUrl}/`,
-  liveBackendUrl,
-  `${liveBackendUrl}/`,
-  "https://cometapp.onrender.com",
-  "https://cometapp.onrender.com/",
-  process.env.FRONTEND_URL,
-  process.env.CORS_ORIGIN,
-  process.env.RENDER_EXTERNAL_URL,
-];
-
 const allowedOrigins = new Set(
-  appOrigins
+  [
+    "http://localhost:5173",
+    "http://localhost:3000",
+    "http://127.0.0.1:5173",
+    "https://comet.vconect.co.ke",
+    "https://comet.vconect.co.ke/",
+    "https://cometapp.onrender.com",
+    "https://comet-app-iv30.onrender.com",
+    "https://cometapp.onrender.com/",
+    "https://comet-app-iv30.onrender.com/",
+    process.env.FRONTEND_URL,
+    process.env.CORS_ORIGIN,
+  ]
     .filter((value): value is string => Boolean(value))
     .map((value) => value.replace(/\/$/, "")),
 );
