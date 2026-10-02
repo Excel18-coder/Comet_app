@@ -10,6 +10,7 @@ config({
 
 import express, { type Express } from "express";
 import cors from "cors";
+import cookieParser from 'cookie-parser';
 import pinoHttp from "pino-http";
 import router from "./routes";
 import { logger } from "./lib/logger";
@@ -71,13 +72,14 @@ const corsOptions = {
   },
   credentials: true,
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
+  allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "Cookie"],
 };
 
 app.options(/^(.*)$/, cors(corsOptions));
 app.use(cors(corsOptions));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(cookieParser());
 
 // Initialize database connection
 void connectToDatabase().catch((error) => {

@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type FormEvent, type ReactNode, type UIEvent } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
   ArrowRight,
@@ -782,6 +782,10 @@ function AdminDashboard() {
   const [tokenInput, setTokenInput] = useState('');
   const [error, setError] = useState('');
   const [activePanel, setActivePanel] = useState<'overview' | 'signups' | 'analytics' | 'exports'>('overview');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null);
 
   const platformColors: Record<string, string> = {
     macOS: '#3558dc',
@@ -801,116 +805,169 @@ function AdminDashboard() {
     return `${apiBaseUrl}${path}`;
   }
 
-  const navigateToPanel = (panel: 'overview' | 'signups' | 'analytics' | 'exports') => {
-    setActivePanel(panel);
+  const loadDashboardData = async (nextPage = 1, replace = true) => {
+    try {
+      const [signupsRes, statsRes] = await Promise.all([
+        fetch(buildApiUrl(`/api/signups?page=${nextPage}&limit=20`), { credentials: 'include' }).then((res) => res.json()),
+        fetch(buildApiUrl('/api/signups/stats'), { credentials: 'include' }).then((res) => res.json()),
+      ]);
 
-    if (panel === 'exports') {
-      exportToCSV();
+      if (signupsRes.success && Array.isArray(signupsRes.data)) {
+        const nextEntries = signupsRes.data as SignupEntry[];
+        setSignups((prev) => {
+          if (replace) {
+            return nextEntries;
+          }
+
+          const merged = [...nextEntries, ...prev];
+          return merged.filter(
+            (item, index, arr) => arr.findIndex((entry) => entry.email === item.email && entry.timestamp === item.timestamp) === index,
+          );
+        });
+        setCurrentPage(nextPage);
+        setHasMore((signupsRes.pagination?.pages ?? nextPage) > nextPage);
+      }
+      if (statsRes.success && statsRes.stats) {
+        setStats(statsRes.stats);
+      }
+      setIsAuthenticated(true);
+    } catch (err) {
+      console.error('Error loading dashboard data:', err);
+      setIsAuthenticated(false);
+      setError('Your session has expired. Please sign in again.');
+    }
+  };
+
+  const loadOlderSignups = async () => {
+    if (isLoadingMore || !hasMore) {
       return;
     }
 
-    const panelMap = {
-      overview: 'admin-overview',
-      signups: 'admin-signups',
-      analytics: 'admin-analytics',
-      exports: 'admin-overview',
-    } as const;
+    const container = scrollContainerRef.current;
+    if (!container) {
+      return;
+    }
 
-    const element = document.getElementById(panelMap[panel]);
-    if (element) {
-      element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    const previousScrollHeight = container.scrollHeight;
+    const previousScrollTop = container.scrollTop;
+
+    setIsLoadingMore(true);
+
+    try {
+      const nextPage = currentPage + 1;
+      const response = await fetch(buildApiUrl(`/api/signups?page=${nextPage}&limit=20`), { credentials: 'include' });
+      const data = await response.json();
+
+      if (!response.ok || !data?.success || !Array.isArray(data.data) || data.data.length === 0) {
+        setHasMore(false);
+        return;
+      }
+
+      const nextEntries = data.data as SignupEntry[];
+      setSignups((prev) => {
+        const merged = [...nextEntries, ...prev];
+        return merged.filter(
+          (item, index, arr) => arr.findIndex((entry) => entry.email === item.email && entry.timestamp === item.timestamp) === index,
+        );
+      });
+      setCurrentPage(nextPage);
+      setHasMore((data.pagination?.pages ?? nextPage) > nextPage);
+
+      requestAnimationFrame(() => {
+        const nextContainer = scrollContainerRef.current;
+        if (!nextContainer) return;
+        const newScrollHeight = nextContainer.scrollHeight;
+        nextContainer.scrollTop = previousScrollTop + (newScrollHeight - previousScrollHeight);
+      });
+    } finally {
+      setIsLoadingMore(false);
     }
   };
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const token = params.get('token');
-
-    if (token) {
-      verifyToken(token);
-      return;
-    }
-
-    const savedToken = sessionStorage.getItem('comet-admin-token');
-    if (savedToken) {
-      verifyToken(savedToken);
-    }
+    void loadDashboardData(1, true);
   }, []);
 
-  const hashToken = async (str: string) => {
-    const encoder = new TextEncoder();
-    const data = encoder.encode(str);
-    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
-  };
-
-  const verifyToken = async (token: string) => {
-    const normalizedToken = token.trim();
-    const envTokenHash = import.meta.env.VITE_ADMIN_TOKEN_HASH ?? '';
-    const expected = envTokenHash ? await hashToken(normalizedToken) : normalizedToken === 'Nm643PpQ';
-
-    if (envTokenHash ? expected === envTokenHash : expected) {
-      setIsAuthenticated(true);
-      sessionStorage.setItem('comet-admin-token', normalizedToken);
-      loadDashboardData();
-      setError('');
-      window.history.replaceState({}, document.title, window.location.pathname);
-      return;
+  const handleScroll = (event: UIEvent<HTMLDivElement>) => {
+    const container = event.currentTarget;
+    if (container.scrollTop <= 80 && hasMore && !isLoadingMore) {
+      void loadOlderSignups();
     }
-
-    setError('Invalid or expired token');
   };
 
-  const loadDashboardData = () => {
-    const token = sessionStorage.getItem('comet-admin-token');
-    if (!token) return;
-
-    Promise.all([
-      fetch(buildApiUrl('/api/signups'), {
-        headers: { Authorization: `Bearer ${token}` },
-      }).then((res) => res.json()),
-      fetch(buildApiUrl('/api/signups/stats'), {
-        headers: { Authorization: `Bearer ${token}` },
-      }).then((res) => res.json()),
-    ])
-      .then(([signupsRes, statsRes]) => {
-        if (signupsRes.success && Array.isArray(signupsRes.data)) {
-          setSignups(signupsRes.data);
-        }
-        if (statsRes.success && statsRes.stats) {
-          setStats(statsRes.stats);
-        }
-      })
-      .catch((err) => {
-        console.error('Error loading dashboard data:', err);
-      });
-  };
-
-  const handleLogin = (e: FormEvent) => {
+  const handleLogin = async (e: FormEvent) => {
     e.preventDefault();
     setError('');
+
     if (!tokenInput.trim()) {
-      setError('Please enter a valid admin token');
+      setError('Please enter a valid admin password');
       return;
     }
-    void verifyToken(tokenInput);
+
+    try {
+      const res = await fetch(buildApiUrl('/api/admin/login'), {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: tokenInput.trim() }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data?.success) {
+        setError(data?.error || 'Invalid admin password');
+        return;
+      }
+
+      setTokenInput('');
+      setIsAuthenticated(true);
+      await loadDashboardData();
+    } catch (err) {
+      console.error('Admin login failed:', err);
+      setError('Unable to sign in. Please try again.');
+    }
   };
 
-  const handleLogout = () => {
-    setIsAuthenticated(false);
-    sessionStorage.removeItem('comet-admin-token');
-    setSignups([]);
-    setStats({ total: 0, byPlatform: [], byReferral: [] });
-    setTokenInput('');
-    setError('');
+  const handleLogout = async () => {
+    try {
+      await fetch(buildApiUrl('/api/admin/logout'), {
+        method: 'POST',
+        credentials: 'include',
+      });
+    } catch (err) {
+      console.error('Logout failed:', err);
+    } finally {
+      setIsAuthenticated(false);
+      setSignups([]);
+      setStats({ total: 0, byPlatform: [], byReferral: [] });
+      setTokenInput('');
+      setError('');
+    }
   };
 
-  const exportToCSV = () => {
-    const token = sessionStorage.getItem('comet-admin-token');
+  const exportToCSV = async () => {
+    try {
+      const response = await fetch(buildApiUrl('/api/signups/export/csv'), {
+        credentials: 'include',
+      });
 
-    if (!token) return;
-    window.location.href = buildApiUrl(`/api/signups/export/csv?token=${encodeURIComponent(token)}`);
+      if (!response.ok) {
+        throw new Error('Unauthorized export request');
+      }
+
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'comet-signups.csv';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Export failed:', err);
+      setError('Unable to export signups. Please sign in again.');
+      setIsAuthenticated(false);
+    }
   };
 
   const maxPlatformValue = Math.max(...stats.byPlatform.map((item) => item.count), 1);
@@ -921,7 +978,7 @@ function AdminDashboard() {
     return `${Math.round((value / total) * 100)}%`;
   };
 
-  const recentSignups = [...signups].slice(0, 6);
+  const recentSignups = signups;
   const mobileUsers = signups.filter((signup) => signup.platforms.some((platform) => ['iPhone', 'Android'].includes(platform))).length;
   const desktopUsers = signups.filter((signup) => signup.platforms.some((platform) => ['macOS', 'Windows'].includes(platform))).length;
 
@@ -1005,7 +1062,6 @@ function AdminDashboard() {
           <div className="mt-10 rounded-2xl border border-slate-700 bg-slate-900/70 p-4">
             <div className="text-[0.62rem] font-mono uppercase tracking-[0.12em] text-slate-400">Access</div>
             <div className="mt-3 text-sm font-medium text-slate-100">Protected admin</div>
-            <div className="mt-2 text-xs text-slate-400">Password: Nm643PpQ</div>
           </div>
         </aside>
 
@@ -1154,50 +1210,67 @@ function AdminDashboard() {
                 <span className="text-xs text-[#6d7892]">Latest from the database</span>
               </div>
 
-              {recentSignups.length === 0 ? (
-                <div className="text-sm text-[#6d7892]">No signups .</div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="min-w-full text-left text-sm">
-                    <thead className="bg-[#f4f7fb]">
-                      <tr className="border-b border-[#e5edf8] text-[#6d7892]">
-                        <th className="px-4 py-3 font-semibold">Email</th>
-                        <th className="px-4 py-3 font-semibold">WhatsApp</th>
-                        <th className="px-4 py-3 font-semibold">Devices</th>
-                        <th className="px-4 py-3 font-semibold">Source</th>
-                        <th className="px-4 py-3 font-semibold">Date</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {recentSignups.map((signup) => (
-                        <tr key={`${signup.email}-${signup.timestamp}-row`} className="border-b border-[#edf2f8] align-top last:border-b-0">
-                          <td className="px-4 py-3 font-medium text-[#152752]">{signup.email}</td>
-                          <td className="px-4 py-3 text-[#152752]">{signup.whatsapp || '—'}</td>
-                          <td className="px-4 py-3">
-                            <div className="flex flex-wrap gap-1.5">
-                              {signup.platforms.length > 0 ? (
-                                signup.platforms.map((platform) => (
-                                  <span
-                                    key={`${signup.email}-${platform}-row`}
-                                    className="rounded-full px-2 py-1 text-[10px] font-semibold text-white"
-                                    style={{ backgroundColor: platformColors[platform] ?? platformColors.default }}
-                                  >
-                                    {platform}
-                                  </span>
-                                ))
-                              ) : (
-                                <span className="text-[#6d7892]">—</span>
-                              )}
-                            </div>
-                          </td>
-                          <td className="px-4 py-3 text-[#6d7892]">{signup.referral || 'Direct'}</td>
-                          <td className="px-4 py-3 text-[#6d7892]">{new Date(signup.timestamp).toLocaleDateString()}</td>
+              <div
+                ref={scrollContainerRef}
+                onScroll={handleScroll}
+                className="max-h-[400px] overflow-auto scroll-smooth pr-2"
+                data-testid="scroll-container"
+              >
+                {recentSignups.length === 0 ? (
+                  <div className="text-sm text-[#6d7892]">No signups yet.</div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full text-left text-sm">
+                      <thead className="bg-[#f4f7fb]">
+                        <tr className="border-b border-[#e5edf8] text-[#6d7892]">
+                          <th className="px-4 py-3 font-semibold">Email</th>
+                          <th className="px-4 py-3 font-semibold">WhatsApp</th>
+                          <th className="px-4 py-3 font-semibold">Devices</th>
+                          <th className="px-4 py-3 font-semibold">Source</th>
+                          <th className="px-4 py-3 font-semibold">Date</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
+                      </thead>
+                      <tbody>
+                        {recentSignups.map((signup) => (
+                          <tr key={`${signup.email}-${signup.timestamp}-row`} className="border-b border-[#edf2f8] align-top last:border-b-0">
+                            <td className="px-4 py-3 font-medium text-[#152752]">{signup.email}</td>
+                            <td className="px-4 py-3 text-[#152752]">{signup.whatsapp || '—'}</td>
+                            <td className="px-4 py-3">
+                              <div className="flex flex-wrap gap-1.5">
+                                {signup.platforms.length > 0 ? (
+                                  signup.platforms.map((platform) => (
+                                    <span
+                                      key={`${signup.email}-${platform}-row`}
+                                      className="rounded-full px-2 py-1 text-[10px] font-semibold text-white"
+                                      style={{ backgroundColor: platformColors[platform] ?? platformColors.default }}
+                                    >
+                                      {platform}
+                                    </span>
+                                  ))
+                                ) : (
+                                  <span className="text-[#6d7892]">—</span>
+                                )}
+                              </div>
+                            </td>
+                            <td className="px-4 py-3 text-[#6d7892]">{signup.referral || 'Direct'}</td>
+                            <td className="px-4 py-3 text-[#6d7892]">{new Date(signup.timestamp).toLocaleDateString()}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+                {isLoadingMore && (
+                  <div className="flex items-center justify-center py-4">
+                    <span className="text-sm text-[#6d7892]">Loading more signups...</span>
+                  </div>
+                )}
+                {!hasMore && (
+                  <div className="flex items-center justify-center py-4">
+                    <span className="text-sm text-[#6d7892]">No more signups to load</span>
+                  </div>
+                )}
+              </div>
             </section>
           </div>
         </main>

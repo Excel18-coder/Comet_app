@@ -1,9 +1,9 @@
 import { Router, Request, Response } from 'express';
+import crypto from 'crypto';
 import { getDatabase } from '../lib/mongodb';
 import { logger } from '../lib/logger';
 
-const DEFAULT_ADMIN_TOKEN = 'Nm643PpQ';
-const ADMIN_API_TOKEN = process.env.ADMIN_API_TOKEN ?? DEFAULT_ADMIN_TOKEN;
+const ADMIN_API_TOKEN = process.env.ADMIN_API_TOKEN;
 
 interface SignupEntry {
   email: string;
@@ -14,6 +14,62 @@ interface SignupEntry {
 }
 
 const router = Router();
+
+function safeCompare(a?: string, b?: string) {
+  if (!a || !b) return false;
+  try {
+    const ab = Buffer.from(a);
+    const bb = Buffer.from(b);
+    if (ab.length !== bb.length) return false;
+    return crypto.timingSafeEqual(ab, bb);
+  } catch {
+    return false;
+  }
+}
+
+function expectedSessionCookie() {
+  if (!ADMIN_API_TOKEN) return '';
+  return crypto.createHash('sha256').update(ADMIN_API_TOKEN).digest('hex');
+}
+
+// POST: Admin login - sets a HttpOnly cookie on success
+router.post('/admin/login', async (req: Request, res: Response) => {
+  try {
+    const { token } = req.body || {};
+
+    if (!ADMIN_API_TOKEN) {
+      return res.status(500).json({ error: 'Admin login not configured on server' });
+    }
+
+    if (!token || !safeCompare(token, ADMIN_API_TOKEN)) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    const cookieValue = expectedSessionCookie();
+    res.cookie('comet_admin', cookieValue, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: 24 * 60 * 60 * 1000,
+    });
+
+    return res.status(200).json({ success: true });
+  } catch (error) {
+    logger.error({ error }, 'Error during admin login');
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST: Admin logout
+router.post('/admin/logout', (_req: Request, res: Response) => {
+  res.clearCookie('comet_admin', {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'strict',
+  });
+
+  return res.status(200).json({ success: true });
+});
 
 // POST: Create new signup
 router.post('/signups', async (req: Request, res: Response) => {
@@ -77,10 +133,18 @@ router.post('/signups', async (req: Request, res: Response) => {
 // GET: Fetch all signups (admin only)
 router.get('/signups', async (req: Request, res: Response) => {
   try {
-    // Verify admin token
-    const token = req.headers.authorization?.split(' ')[1];
-    
-    if (!token || token !== ADMIN_API_TOKEN) {
+    // Verify admin session: prefer HttpOnly cookie, fallback to Authorization header
+    if (!ADMIN_API_TOKEN) {
+      return res.status(500).json({ error: 'Admin endpoints not configured' });
+    }
+
+    const cookieVal = (req as any).cookies?.comet_admin as string | undefined;
+    const headerToken = req.headers.authorization?.split(' ')[1];
+
+    const cookieOk = cookieVal && cookieVal === expectedSessionCookie();
+    const headerOk = headerToken && safeCompare(headerToken, ADMIN_API_TOKEN);
+
+    if (!cookieOk && !headerOk) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
@@ -124,13 +188,20 @@ router.get('/signups', async (req: Request, res: Response) => {
 // GET: Export signups as CSV
 router.get('/signups/export/csv', async (req: Request, res: Response) => {
   try {
-    // Verify admin token (can be from query or header)
-    let token = req.headers.authorization?.split(' ')[1];
-    if (!token) {
-      token = req.query.token as string;
+    // Verify admin session for CSV export. Cookie preferred; header or query token allowed as fallback.
+    if (!ADMIN_API_TOKEN) {
+      return res.status(500).json({ error: 'Admin endpoints not configured' });
     }
-    
-    if (!token || token !== ADMIN_API_TOKEN) {
+
+    const cookieVal = (req as any).cookies?.comet_admin as string | undefined;
+    let headerToken = req.headers.authorization?.split(' ')[1];
+    const queryToken = req.query.token as string | undefined;
+
+    const cookieOk = cookieVal && cookieVal === expectedSessionCookie();
+    const headerOk = headerToken && safeCompare(headerToken, ADMIN_API_TOKEN);
+    const queryOk = queryToken && safeCompare(queryToken, ADMIN_API_TOKEN);
+
+    if (!cookieOk && !headerOk && !queryOk) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
@@ -166,9 +237,16 @@ router.get('/signups/export/csv', async (req: Request, res: Response) => {
 // GET: Get signup statistics
 router.get('/signups/stats', async (req: Request, res: Response) => {
   try {
-    const token = req.headers.authorization?.split(' ')[1];
-    
-    if (!token || token !== ADMIN_API_TOKEN) {
+    if (!ADMIN_API_TOKEN) {
+      return res.status(500).json({ error: 'Admin endpoints not configured' });
+    }
+
+    const cookieVal = (req as any).cookies?.comet_admin as string | undefined;
+    const headerToken = req.headers.authorization?.split(' ')[1];
+    const cookieOk = cookieVal && cookieVal === expectedSessionCookie();
+    const headerOk = headerToken && safeCompare(headerToken, ADMIN_API_TOKEN);
+
+    if (!cookieOk && !headerOk) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
