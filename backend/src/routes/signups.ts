@@ -4,7 +4,9 @@ import type { Collection } from 'mongodb';
 import { getDatabase } from '../lib/mongodb';
 import { logger } from '../lib/logger';
 
-const ADMIN_API_TOKEN = process.env.ADMIN_API_TOKEN;
+function getAdminApiToken() {
+  return process.env.ADMIN_API_TOKEN?.trim() || '';
+}
 
 interface SignupEntry {
   email: string;
@@ -28,10 +30,11 @@ function invalidateStatsCache() {
 }
 
 function hasValidAdminSession(req: Request) {
+  const adminToken = getAdminApiToken();
   const headerToken = req.headers.authorization?.split(' ')[1];
   const cookieVal = (req as any).cookies?.comet_admin as string | undefined;
 
-  const headerOk = headerToken && safeCompare(headerToken, ADMIN_API_TOKEN);
+  const headerOk = headerToken && safeCompare(headerToken, adminToken);
   const cookieOk = cookieVal && cookieVal === expectedSessionCookie();
 
   return {
@@ -82,20 +85,22 @@ function safeCompare(a?: string, b?: string) {
 }
 
 function expectedSessionCookie() {
-  if (!ADMIN_API_TOKEN) return '';
-  return crypto.createHash('sha256').update(ADMIN_API_TOKEN).digest('hex');
+  const adminToken = getAdminApiToken();
+  if (!adminToken) return '';
+  return crypto.createHash('sha256').update(adminToken).digest('hex');
 }
 
 // POST: Admin login - sets a HttpOnly cookie on success
 router.post('/admin/login', async (req: Request, res: Response) => {
   try {
     const { token } = req.body || {};
+    const adminToken = getAdminApiToken();
 
-    if (!ADMIN_API_TOKEN) {
+    if (!adminToken) {
       return res.status(500).json({ error: 'Admin login not configured on server' });
     }
 
-    if (!token || !safeCompare(token, ADMIN_API_TOKEN)) {
+    if (!token || !safeCompare(token, adminToken)) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
@@ -108,7 +113,7 @@ router.post('/admin/login', async (req: Request, res: Response) => {
       path: '/',
     });
 
-    return res.status(200).json({ success: true, token: ADMIN_API_TOKEN });
+    return res.status(200).json({ success: true, token: adminToken });
   } catch (error) {
     logger.error({ error }, 'Error during admin login');
     return res.status(500).json({ error: 'Internal server error' });
@@ -191,7 +196,7 @@ router.post('/signups', async (req: Request, res: Response) => {
 router.get('/signups', async (req: Request, res: Response) => {
   try {
     // Verify admin session: prefer Authorization header, fallback to HttpOnly cookie
-    if (!ADMIN_API_TOKEN) {
+    if (!getAdminApiToken()) {
       return res.status(500).json({ error: 'Admin endpoints not configured' });
     }
 
@@ -241,7 +246,7 @@ router.get('/signups', async (req: Request, res: Response) => {
 // GET: Fetch dashboard data in one request
 router.get('/signups/dashboard', async (req: Request, res: Response) => {
   try {
-    if (!ADMIN_API_TOKEN) {
+    if (!getAdminApiToken()) {
       return res.status(500).json({ error: 'Admin endpoints not configured' });
     }
 
@@ -295,7 +300,8 @@ router.get('/signups/dashboard', async (req: Request, res: Response) => {
 router.get('/signups/export/csv', async (req: Request, res: Response) => {
   try {
     // Verify admin session. Header preferred; query token allowed as fallback.
-    if (!ADMIN_API_TOKEN) {
+    const adminToken = getAdminApiToken();
+    if (!adminToken) {
       return res.status(500).json({ error: 'Admin endpoints not configured' });
     }
 
@@ -303,9 +309,9 @@ router.get('/signups/export/csv', async (req: Request, res: Response) => {
     const cookieVal = (req as any).cookies?.comet_admin as string | undefined;
     const queryToken = req.query.token as string | undefined;
 
-    const headerOk = headerToken && safeCompare(headerToken, ADMIN_API_TOKEN);
+    const headerOk = headerToken && safeCompare(headerToken, adminToken);
     const cookieOk = cookieVal && cookieVal === expectedSessionCookie();
-    const queryOk = queryToken && safeCompare(queryToken, ADMIN_API_TOKEN);
+    const queryOk = queryToken && safeCompare(queryToken, adminToken);
 
     if (!headerOk && !cookieOk && !queryOk) {
       return res.status(401).json({ error: 'Unauthorized' });
@@ -343,7 +349,7 @@ router.get('/signups/export/csv', async (req: Request, res: Response) => {
 // GET: Get signup statistics (cached for performance)
 router.get('/signups/stats', async (req: Request, res: Response) => {
   try {
-    if (!ADMIN_API_TOKEN) {
+    if (!getAdminApiToken()) {
       return res.status(500).json({ error: 'Admin endpoints not configured' });
     }
 
