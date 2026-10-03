@@ -110,6 +110,23 @@ function buildApiUrl(path: string) {
   return `${base}${path}`;
 }
 
+function getReferralSource() {
+  const queryReferral = new URLSearchParams(window.location.search).get('ref');
+  if (queryReferral) {
+    return queryReferral.trim().slice(0, 120);
+  }
+
+  if (document.referrer) {
+    try {
+      return new URL(document.referrer).hostname;
+    } catch {
+      return document.referrer.slice(0, 120);
+    }
+  }
+
+  return 'direct';
+}
+
 function formatWhatsappInput(raw: string) {
   const digits = raw.replace(/\D/g, '');
 
@@ -142,7 +159,7 @@ function WaitlistForm({ dark = false, compact = false }: { dark?: boolean; compa
     );
   };
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const normalizedEmail = email.trim().toLowerCase();
     const normalizedWhatsapp = formatWhatsappInput(whatsapp).trim();
@@ -158,40 +175,52 @@ function WaitlistForm({ dark = false, compact = false }: { dark?: boolean; compa
     }
 
     setStatus('loading');
-    
-    const source = new URLSearchParams(window.location.search).get('ref') ?? document.referrer ?? 'direct';
-    
-    // Send to backend API
-    fetch(buildApiUrl('/api/signups'), {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        email: normalizedEmail,
-        whatsapp: normalizedWhatsapp,
-        platforms: platforms.length > 0 ? platforms : [],
-        referral: source,
-      }),
-    })
-      .then((response) => response.json())
-      .then((data) => {
-        if (!data.success) {
-          if (data.error?.includes('already')) {
-            setStatus('duplicate');
-          } else {
-            setStatus('error');
-          }
-          return;
-        }
-        setStatus('success');
-        setEmail('');
-        setWhatsapp('');
-        setPlatforms([]);
-      })
-      .catch(() => {
-        setStatus('error');
+
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), 12000);
+
+    try {
+      const response = await fetch(buildApiUrl('/api/signups'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        signal: controller.signal,
+        body: JSON.stringify({
+          email: normalizedEmail,
+          whatsapp: normalizedWhatsapp,
+          platforms: platforms.length > 0 ? platforms : [],
+          referral: getReferralSource(),
+        }),
       });
+
+      let data: any = null;
+      try {
+        data = await response.json();
+      } catch {
+        data = null;
+      }
+
+      if (!response.ok || !data?.success) {
+        const errorMessage = typeof data?.error === 'string' ? data.error.toLowerCase() : '';
+        if (response.status === 409 || errorMessage.includes('already')) {
+          setStatus('duplicate');
+        } else {
+          setStatus('error');
+        }
+        return;
+      }
+
+      setStatus('success');
+      setEmail('');
+      setWhatsapp('');
+      setPlatforms([]);
+    } catch {
+      setStatus('error');
+    } finally {
+      window.clearTimeout(timeoutId);
+    }
   };
 
   const inputClass = dark
@@ -780,12 +809,16 @@ function AdminDashboard() {
   });
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [tokenInput, setTokenInput] = useState('');
+  const [adminToken, setAdminToken] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [activePanel, setActivePanel] = useState<'overview' | 'signups' | 'analytics' | 'exports'>('overview');
   const [currentPage, setCurrentPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [isLoadingInitial, setIsLoadingInitial] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   const platformColors: Record<string, string> = {
     macOS: '#3558dc',
@@ -805,15 +838,81 @@ function AdminDashboard() {
     return `${apiBaseUrl}${path}`;
   }
 
-  const loadDashboardData = async (nextPage = 1, replace = true) => {
-    try {
-      const [signupsRes, statsRes] = await Promise.all([
-        fetch(buildApiUrl(`/api/signups?page=${nextPage}&limit=20`), { credentials: 'include' }).then((res) => res.json()),
-        fetch(buildApiUrl('/api/signups/stats'), { credentials: 'include' }).then((res) => res.json()),
-      ]);
+  function buildFetchHeaders(token?: string | null): HeadersInit {
+    const headers: HeadersInit = {
+      'Content-Type': 'application/json',
+    };
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    return headers;
+  }
 
-      if (signupsRes.success && Array.isArray(signupsRes.data)) {
-        const nextEntries = signupsRes.data as SignupEntry[];
+  // Helper function for fetch with timeout and retry logic
+  async function fetchWithRetry(
+    url: string,
+    options: RequestInit & { timeout?: number; retries?: number } = {},
+  ): Promise<Response> {
+    const { timeout = 10000, retries = 2, ...fetchOptions } = options;
+    let lastError: Error | null = null;
+
+    for (let attempt = 0; attempt <= retries; attempt++) {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+        try {
+          const response = await fetch(url, {
+            ...fetchOptions,
+            signal: controller.signal,
+          });
+          clearTimeout(timeoutId);
+          return response;
+        } finally {
+          clearTimeout(timeoutId);
+        }
+      } catch (err: any) {
+        lastError = err;
+        // Retry on network errors or timeouts, but not on 4xx/5xx responses
+        if (attempt < retries && (err.name === 'AbortError' || !navigator.onLine)) {
+          await new Promise((resolve) => setTimeout(resolve, Math.pow(2, attempt) * 500)); // Exponential backoff
+          continue;
+        }
+        break;
+      }
+    }
+
+    throw lastError || new Error('Failed to fetch after retries');
+  }
+
+  const loadDashboardData = async (nextPage = 1, replace = true, token?: string | null) => {
+    const authToken = token || adminToken;
+    if (!authToken) {
+      setError('Authentication token missing');
+      return;
+    }
+
+    setIsLoadingInitial(true);
+    setError('');
+
+    try {
+      const headers = buildFetchHeaders(authToken);
+
+      const dashboardResult = await fetchWithRetry(buildApiUrl(`/api/signups/dashboard?page=${nextPage}&limit=20`), {
+        headers,
+        credentials: 'include',
+      }).then((res) => {
+        if (!res.ok) {
+          if (res.status === 401) {
+            throw new Error('Session expired. Please sign in again.');
+          }
+          throw new Error(`Failed to fetch dashboard data: ${res.statusText}`);
+        }
+        return res.json();
+      });
+
+      if (dashboardResult?.success && Array.isArray(dashboardResult.data)) {
+        const nextEntries = dashboardResult.data as SignupEntry[];
         setSignups((prev) => {
           if (replace) {
             return nextEntries;
@@ -821,20 +920,28 @@ function AdminDashboard() {
 
           const merged = [...nextEntries, ...prev];
           return merged.filter(
-            (item, index, arr) => arr.findIndex((entry) => entry.email === item.email && entry.timestamp === item.timestamp) === index,
+            (item, index, arr) =>
+              arr.findIndex((entry) => entry.email === item.email && entry.timestamp === item.timestamp) ===
+              index,
           );
         });
         setCurrentPage(nextPage);
-        setHasMore((signupsRes.pagination?.pages ?? nextPage) > nextPage);
+        setHasMore((dashboardResult.pagination?.pages ?? nextPage) > nextPage);
+      } else {
+        setError('Failed to parse dashboard data');
       }
-      if (statsRes.success && statsRes.stats) {
-        setStats(statsRes.stats);
+
+      if (dashboardResult?.stats) {
+        setStats(dashboardResult.stats);
       }
+
       setIsAuthenticated(true);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error loading dashboard data:', err);
       setIsAuthenticated(false);
-      setError('Your session has expired. Please sign in again.');
+      setError(err?.message || 'Failed to load dashboard. Please try again.');
+    } finally {
+      setIsLoadingInitial(false);
     }
   };
 
@@ -852,13 +959,29 @@ function AdminDashboard() {
     const previousScrollTop = container.scrollTop;
 
     setIsLoadingMore(true);
+    setError('');
 
     try {
       const nextPage = currentPage + 1;
-      const response = await fetch(buildApiUrl(`/api/signups?page=${nextPage}&limit=20`), { credentials: 'include' });
+      const headers = buildFetchHeaders(adminToken);
+
+      const response = await fetchWithRetry(buildApiUrl(`/api/signups?page=${nextPage}&limit=20`), {
+        headers,
+        credentials: 'include',
+      });
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          setIsAuthenticated(false);
+          setError('Your session has expired. Please sign in again.');
+          return;
+        }
+        throw new Error(`Failed to load more signups: ${response.statusText}`);
+      }
+
       const data = await response.json();
 
-      if (!response.ok || !data?.success || !Array.isArray(data.data) || data.data.length === 0) {
+      if (!data?.success || !Array.isArray(data.data) || data.data.length === 0) {
         setHasMore(false);
         return;
       }
@@ -879,13 +1002,20 @@ function AdminDashboard() {
         const newScrollHeight = nextContainer.scrollHeight;
         nextContainer.scrollTop = previousScrollTop + (newScrollHeight - previousScrollHeight);
       });
+    } catch (err: any) {
+      console.error('Error loading older signups:', err);
+      setError(`Failed to load more signups: ${err?.message || 'Unknown error'}`);
     } finally {
       setIsLoadingMore(false);
     }
   };
 
   useEffect(() => {
-    void loadDashboardData(1, true);
+    const storedToken = sessionStorage.getItem('comet_admin_token');
+    if (storedToken) {
+      setAdminToken(storedToken);
+      void loadDashboardData(1, true, storedToken);
+    }
   }, []);
 
   const handleScroll = (event: UIEvent<HTMLDivElement>) => {
@@ -904,38 +1034,59 @@ function AdminDashboard() {
       return;
     }
 
+    setIsLoadingInitial(true);
+
     try {
-      const res = await fetch(buildApiUrl('/api/admin/login'), {
+      const res = await fetchWithRetry(buildApiUrl('/api/admin/login'), {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token: tokenInput.trim() }),
+        timeout: 8000,
+        retries: 1,
       });
 
-      const data = await res.json();
-      if (!res.ok || !data?.success) {
-        setError(data?.error || 'Invalid admin password');
+      if (!res.ok) {
+        const data = await res.json();
+        setError(data?.error || `Login failed: ${res.statusText}`);
         return;
       }
 
+      const data = await res.json();
+      if (!data?.success) {
+        setError(data?.error || 'Login failed. Please try again.');
+        return;
+      }
+
+      const token = tokenInput.trim();
+      sessionStorage.setItem('comet_admin_token', token);
+      setAdminToken(token);
       setTokenInput('');
       setIsAuthenticated(true);
-      await loadDashboardData();
-    } catch (err) {
+      setError('');
+      await loadDashboardData(1, true, token);
+    } catch (err: any) {
       console.error('Admin login failed:', err);
-      setError('Unable to sign in. Please try again.');
+      setError(err?.message || 'Unable to sign in. Please check your connection and try again.');
+      setIsAuthenticated(false);
+    } finally {
+      setIsLoadingInitial(false);
     }
   };
 
   const handleLogout = async () => {
     try {
-      await fetch(buildApiUrl('/api/admin/logout'), {
+      const headers = buildFetchHeaders(adminToken);
+      await fetchWithRetry(buildApiUrl('/api/admin/logout'), {
         method: 'POST',
+        headers,
         credentials: 'include',
       });
     } catch (err) {
       console.error('Logout failed:', err);
     } finally {
+      sessionStorage.removeItem('comet_admin_token');
+      setAdminToken(null);
       setIsAuthenticated(false);
       setSignups([]);
       setStats({ total: 0, byPlatform: [], byReferral: [] });
@@ -944,29 +1095,51 @@ function AdminDashboard() {
     }
   };
 
+  const navigateToPanel = (panel: 'overview' | 'signups' | 'analytics' | 'exports') => {
+    setActivePanel(panel);
+  };
+
   const exportToCSV = async () => {
+    setIsExporting(true);
+    setError('');
+
     try {
-      const response = await fetch(buildApiUrl('/api/signups/export/csv'), {
+      const headers = buildFetchHeaders(adminToken);
+      const response = await fetchWithRetry(buildApiUrl('/api/signups/export/csv'), {
+        headers,
         credentials: 'include',
+        timeout: 15000,
+        retries: 1,
       });
 
       if (!response.ok) {
-        throw new Error('Unauthorized export request');
+        if (response.status === 401) {
+          setError('Session expired. Please sign in again.');
+          setIsAuthenticated(false);
+          return;
+        }
+        throw new Error(`Export failed: ${response.statusText}`);
       }
 
       const blob = await response.blob();
+      if (blob.size === 0) {
+        setError('Export failed: Empty response');
+        return;
+      }
+
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = 'comet-signups.csv';
+      link.download = `comet-signups-${new Date().toISOString().split('T')[0]}.csv`;
       document.body.appendChild(link);
       link.click();
       link.remove();
       URL.revokeObjectURL(url);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Export failed:', err);
-      setError('Unable to export signups. Please sign in again.');
-      setIsAuthenticated(false);
+      setError(`Failed to export CSV: ${err?.message || 'Unknown error'}`);
+    } finally {
+      setIsExporting(false);
     }
   };
 

@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import crypto from 'crypto';
+import type { Collection } from 'mongodb';
 import { getDatabase } from '../lib/mongodb';
 import { logger } from '../lib/logger';
 
@@ -14,6 +15,59 @@ interface SignupEntry {
 }
 
 const router = Router();
+
+// Simple in-memory cache for stats (TTL: 30 seconds)
+let statsCache: {
+  data: any;
+  timestamp: number;
+} | null = null;
+const STATS_CACHE_TTL = 30000; // 30 seconds
+
+function invalidateStatsCache() {
+  statsCache = null;
+}
+
+function hasValidAdminSession(req: Request) {
+  const headerToken = req.headers.authorization?.split(' ')[1];
+  const cookieVal = (req as any).cookies?.comet_admin as string | undefined;
+
+  const headerOk = headerToken && safeCompare(headerToken, ADMIN_API_TOKEN);
+  const cookieOk = cookieVal && cookieVal === expectedSessionCookie();
+
+  return {
+    headerToken,
+    cookieVal,
+    authorized: Boolean(headerOk || cookieOk),
+  };
+}
+
+async function fetchSignupStats(collection: Collection<SignupEntry>) {
+  const total = await collection.countDocuments();
+
+  const [platformStats, referralStats] = await Promise.all([
+    collection
+      .aggregate([
+        { $unwind: '$platforms' },
+        { $group: { _id: '$platforms', count: { $sum: 1 } } },
+        { $sort: { count: -1 } },
+        { $limit: 20 },
+      ])
+      .toArray(),
+    collection
+      .aggregate([
+        { $group: { _id: '$referral', count: { $sum: 1 } } },
+        { $sort: { count: -1 } },
+        { $limit: 20 },
+      ])
+      .toArray(),
+  ]);
+
+  return {
+    total,
+    byPlatform: platformStats,
+    byReferral: referralStats,
+  };
+}
 
 function safeCompare(a?: string, b?: string) {
   if (!a || !b) return false;
@@ -49,11 +103,12 @@ router.post('/admin/login', async (req: Request, res: Response) => {
     res.cookie('comet_admin', cookieValue, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
+      sameSite: 'lax',
       maxAge: 24 * 60 * 60 * 1000,
+      path: '/',
     });
 
-    return res.status(200).json({ success: true });
+    return res.status(200).json({ success: true, token: ADMIN_API_TOKEN });
   } catch (error) {
     logger.error({ error }, 'Error during admin login');
     return res.status(500).json({ error: 'Internal server error' });
@@ -65,7 +120,8 @@ router.post('/admin/logout', (_req: Request, res: Response) => {
   res.clearCookie('comet_admin', {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
-    sameSite: 'strict',
+    sameSite: 'lax',
+    path: '/',
   });
 
   return res.status(200).json({ success: true });
@@ -112,6 +168,7 @@ router.post('/signups', async (req: Request, res: Response) => {
     };
 
     const result = await collection.insertOne(newSignup);
+    invalidateStatsCache();
 
     logger.info({ email: normalizedEmail, whatsapp: normalizedWhatsapp, platforms: selectedPlatforms }, 'New signup created');
 
@@ -133,18 +190,15 @@ router.post('/signups', async (req: Request, res: Response) => {
 // GET: Fetch all signups (admin only)
 router.get('/signups', async (req: Request, res: Response) => {
   try {
-    // Verify admin session: prefer HttpOnly cookie, fallback to Authorization header
+    // Verify admin session: prefer Authorization header, fallback to HttpOnly cookie
     if (!ADMIN_API_TOKEN) {
       return res.status(500).json({ error: 'Admin endpoints not configured' });
     }
 
-    const cookieVal = (req as any).cookies?.comet_admin as string | undefined;
-    const headerToken = req.headers.authorization?.split(' ')[1];
+    const { authorized, headerToken, cookieVal } = hasValidAdminSession(req);
 
-    const cookieOk = cookieVal && cookieVal === expectedSessionCookie();
-    const headerOk = headerToken && safeCompare(headerToken, ADMIN_API_TOKEN);
-
-    if (!cookieOk && !headerOk) {
+    if (!authorized) {
+      logger.warn({ hasHeader: !!headerToken, hasCookie: !!cookieVal }, 'Unauthorized signups request');
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
@@ -156,16 +210,15 @@ router.get('/signups', async (req: Request, res: Response) => {
     const limit = Math.min(100, parseInt(req.query.limit as string) || 20);
     const skip = (page - 1) * limit;
 
-    // Fetch signups
-    const signups = await collection
-      .find({})
-      .sort({ timestamp: -1 })
-      .skip(skip)
-      .limit(limit)
-      .toArray();
-
-    // Get total count
-    const total = await collection.countDocuments();
+    const [signups, total] = await Promise.all([
+      collection
+        .find({})
+        .sort({ timestamp: -1 })
+        .skip(skip)
+        .limit(limit)
+        .toArray(),
+      collection.countDocuments(),
+    ]);
 
     logger.info({ count: signups.length, page, limit }, 'Fetched signups');
 
@@ -185,23 +238,76 @@ router.get('/signups', async (req: Request, res: Response) => {
   }
 });
 
-// GET: Export signups as CSV
-router.get('/signups/export/csv', async (req: Request, res: Response) => {
+// GET: Fetch dashboard data in one request
+router.get('/signups/dashboard', async (req: Request, res: Response) => {
   try {
-    // Verify admin session for CSV export. Cookie preferred; header or query token allowed as fallback.
     if (!ADMIN_API_TOKEN) {
       return res.status(500).json({ error: 'Admin endpoints not configured' });
     }
 
+    const { authorized, headerToken, cookieVal } = hasValidAdminSession(req);
+
+    if (!authorized) {
+      logger.warn({ hasHeader: !!headerToken, hasCookie: !!cookieVal }, 'Unauthorized dashboard request');
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const db = getDatabase();
+    const collection = db.collection<SignupEntry>('signups');
+
+    const page = Math.max(1, parseInt(req.query.page as string) || 1);
+    const limit = Math.min(100, parseInt(req.query.limit as string) || 20);
+    const skip = (page - 1) * limit;
+
+    const statsPromise =
+      statsCache && Date.now() - statsCache.timestamp < STATS_CACHE_TTL
+        ? Promise.resolve(statsCache.data)
+        : fetchSignupStats(collection);
+
+    const [signups, stats] = await Promise.all([
+      collection.find({}).sort({ timestamp: -1 }).skip(skip).limit(limit).toArray(),
+      statsPromise,
+    ]);
+
+    statsCache = {
+      data: stats,
+      timestamp: Date.now(),
+    };
+
+    return res.status(200).json({
+      success: true,
+      data: signups,
+      stats,
+      pagination: {
+        page,
+        limit,
+        total: stats.total,
+        pages: Math.ceil(stats.total / limit),
+      },
+    });
+  } catch (error) {
+    logger.error({ error }, 'Error fetching dashboard data');
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET: Export signups as CSV
+router.get('/signups/export/csv', async (req: Request, res: Response) => {
+  try {
+    // Verify admin session. Header preferred; query token allowed as fallback.
+    if (!ADMIN_API_TOKEN) {
+      return res.status(500).json({ error: 'Admin endpoints not configured' });
+    }
+
+    const headerToken = req.headers.authorization?.split(' ')[1];
     const cookieVal = (req as any).cookies?.comet_admin as string | undefined;
-    let headerToken = req.headers.authorization?.split(' ')[1];
     const queryToken = req.query.token as string | undefined;
 
-    const cookieOk = cookieVal && cookieVal === expectedSessionCookie();
     const headerOk = headerToken && safeCompare(headerToken, ADMIN_API_TOKEN);
+    const cookieOk = cookieVal && cookieVal === expectedSessionCookie();
     const queryOk = queryToken && safeCompare(queryToken, ADMIN_API_TOKEN);
 
-    if (!cookieOk && !headerOk && !queryOk) {
+    if (!headerOk && !cookieOk && !queryOk) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
@@ -234,51 +340,38 @@ router.get('/signups/export/csv', async (req: Request, res: Response) => {
   }
 });
 
-// GET: Get signup statistics
+// GET: Get signup statistics (cached for performance)
 router.get('/signups/stats', async (req: Request, res: Response) => {
   try {
     if (!ADMIN_API_TOKEN) {
       return res.status(500).json({ error: 'Admin endpoints not configured' });
     }
 
-    const cookieVal = (req as any).cookies?.comet_admin as string | undefined;
-    const headerToken = req.headers.authorization?.split(' ')[1];
-    const cookieOk = cookieVal && cookieVal === expectedSessionCookie();
-    const headerOk = headerToken && safeCompare(headerToken, ADMIN_API_TOKEN);
+    const { authorized, headerToken, cookieVal } = hasValidAdminSession(req);
 
-    if (!cookieOk && !headerOk) {
+    if (!authorized) {
+      logger.warn({ hasHeader: !!headerToken, hasCookie: !!cookieVal }, 'Unauthorized stats request');
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
     const db = getDatabase();
     const collection = db.collection<SignupEntry>('signups');
 
-    const total = await collection.countDocuments();
+    const statsData =
+      statsCache && Date.now() - statsCache.timestamp < STATS_CACHE_TTL
+        ? statsCache.data
+        : await fetchSignupStats(collection);
 
-    // Platform breakdown
-    const platformStats = await collection
-      .aggregate([
-        { $unwind: '$platforms' },
-        { $group: { _id: '$platforms', count: { $sum: 1 } } },
-        { $sort: { count: -1 } },
-      ])
-      .toArray();
-
-    // Referral breakdown
-    const referralStats = await collection
-      .aggregate([
-        { $group: { _id: '$referral', count: { $sum: 1 } } },
-        { $sort: { count: -1 } },
-      ])
-      .toArray();
+    // Cache the stats
+    statsCache = {
+      data: statsData,
+      timestamp: Date.now(),
+    };
 
     return res.status(200).json({
       success: true,
-      stats: {
-        total,
-        byPlatform: platformStats,
-        byReferral: referralStats,
-      },
+      stats: statsData,
+      cached: false,
     });
   } catch (error) {
     logger.error({ error }, 'Error fetching statistics');
