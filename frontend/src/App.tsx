@@ -32,6 +32,8 @@ import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import NotFound from '@/pages/not-found';
 import { Route, Switch, useLocation, Router as WouterRouter } from 'wouter';
+import { startKeepAlive, stopKeepAlive } from '@/services/keep-alive';
+import { fetchWithRetry } from '@/services/api-retry';
 
 const queryClient = new QueryClient();
 
@@ -180,7 +182,7 @@ function WaitlistForm({ dark = false, compact = false }: { dark?: boolean; compa
     const timeoutId = window.setTimeout(() => controller.abort(), 12000);
 
     try {
-      const response = await fetch(buildApiUrl('/api/signups'), {
+      const response = await fetchWithRetry(buildApiUrl('/api/signups'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -193,6 +195,11 @@ function WaitlistForm({ dark = false, compact = false }: { dark?: boolean; compa
           platforms: platforms.length > 0 ? platforms : [],
           referral: getReferralSource(),
         }),
+        retryOptions: {
+          maxAttempts: 3,
+          initialDelayMs: 500,
+          maxDelayMs: 3000,
+        },
       });
 
       let data: any = null;
@@ -462,6 +469,12 @@ function Home() {
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
+
+  // Start keep-alive service to prevent backend from sleeping
+  useEffect(() => {
+    startKeepAlive();
+    return () => stopKeepAlive();
   }, []);
 
   const handleNav = (target: string) => {

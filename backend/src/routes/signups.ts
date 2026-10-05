@@ -137,14 +137,22 @@ router.post('/signups', async (req: Request, res: Response) => {
   try {
     const { email, whatsapp, platforms, referral } = req.body;
 
+    // Validate input exists
+    if (!email || !whatsapp) {
+      logger.warn({ missingFields: { email: !email, whatsapp: !whatsapp } }, 'Missing required fields in signup');
+      return res.status(400).json({ error: 'Email and WhatsApp are required' });
+    }
+
     // Validate email
     const normalizedEmail = email?.trim().toLowerCase();
     if (!normalizedEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+      logger.warn({ email: normalizedEmail }, 'Invalid email format');
       return res.status(400).json({ error: 'Invalid email format' });
     }
 
     const normalizedWhatsapp = whatsapp?.trim();
     if (!normalizedWhatsapp || !/^\+?[0-9\s\-()]{7,20}$/.test(normalizedWhatsapp) || normalizedWhatsapp.replace(/[^\d]/g, '').length < 8) {
+      logger.warn({ whatsapp: normalizedWhatsapp }, 'Invalid WhatsApp number');
       return res.status(400).json({ error: 'Valid WhatsApp number is required' });
     }
 
@@ -155,11 +163,24 @@ router.post('/signups', async (req: Request, res: Response) => {
       : [];
 
     const db = getDatabase();
+    if (!db) {
+      logger.error({}, 'Database not initialized');
+      return res.status(503).json({ error: 'Service temporarily unavailable' });
+    }
+
     const collection = db.collection<SignupEntry>('signups');
 
     // Check if email already exists
-    const existing = await collection.findOne({ email: normalizedEmail });
+    let existing;
+    try {
+      existing = await collection.findOne({ email: normalizedEmail });
+    } catch (error) {
+      logger.error({ error, email: normalizedEmail }, 'Error checking for existing signup');
+      return res.status(503).json({ error: 'Service temporarily unavailable' });
+    }
+
     if (existing) {
+      logger.info({ email: normalizedEmail }, 'Duplicate signup attempt');
       return res.status(409).json({ error: 'Email already registered' });
     }
 
@@ -172,10 +193,22 @@ router.post('/signups', async (req: Request, res: Response) => {
       referral: referral || 'direct',
     };
 
-    const result = await collection.insertOne(newSignup);
+    let result;
+    try {
+      result = await collection.insertOne(newSignup);
+    } catch (error) {
+      logger.error({ error, newSignup }, 'Error inserting signup into database');
+      return res.status(503).json({ error: 'Failed to save signup' });
+    }
+
+    if (!result.insertedId) {
+      logger.error({ result }, 'Signup inserted but no ID returned');
+      return res.status(500).json({ error: 'Signup creation failed' });
+    }
+
     invalidateStatsCache();
 
-    logger.info({ email: normalizedEmail, whatsapp: normalizedWhatsapp, platforms: selectedPlatforms }, 'New signup created');
+    logger.info({ email: normalizedEmail, platforms: selectedPlatforms, referral: referral || 'direct' }, 'New signup created successfully');
 
     return res.status(201).json({
       success: true,
@@ -187,7 +220,11 @@ router.post('/signups', async (req: Request, res: Response) => {
       logger.warn({ error }, 'Duplicate email signup attempt');
       return res.status(409).json({ error: 'Email already registered' });
     }
-    logger.error({ error }, 'Error creating signup');
+    if (error.name === 'MongoNetworkError' || error.name === 'MongoTimeoutError') {
+      logger.error({ error }, 'Database connection error during signup');
+      return res.status(503).json({ error: 'Service temporarily unavailable, please retry' });
+    }
+    logger.error({ error, errorCode: error.code, errorName: error.name }, 'Error creating signup');
     return res.status(500).json({ error: 'Internal server error' });
   }
 });
